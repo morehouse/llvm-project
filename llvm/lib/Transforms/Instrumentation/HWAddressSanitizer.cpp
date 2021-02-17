@@ -69,7 +69,6 @@ static const size_t kNumberOfAccessSizes = 5;
 static const size_t kDefaultShadowScale = 4;
 static const uint64_t kDynamicShadowSentinel =
     std::numeric_limits<uint64_t>::max();
-static const unsigned kPointerTagShift = 56;
 
 static const unsigned kShadowBaseAlignment = 32;
 
@@ -77,6 +76,10 @@ static cl::opt<std::string> ClMemoryAccessCallbackPrefix(
     "hwasan-memory-access-callback-prefix",
     cl::desc("Prefix for memory access callbacks"), cl::Hidden,
     cl::init("__hwasan_"));
+
+static cl::opt<bool> ClPageAliases("hwasan-page-aliases",
+    cl::desc("use page aliasing to put tags in userspace bits"), cl::Hidden,
+    cl::init(false));
 
 static cl::opt<bool>
     ClInstrumentWithCalls("hwasan-instrument-with-calls",
@@ -288,6 +291,8 @@ private:
   bool HasMatchAllTag = false;
   uint8_t MatchAllTag = 0;
 
+  unsigned PointerTagShift;
+
   Function *HwasanCtorFunction;
 
   FunctionCallee HwasanMemoryAccessCallback[2][kNumberOfAccessSizes];
@@ -479,6 +484,16 @@ void HWAddressSanitizer::initializeModule() {
 
   TargetTriple = Triple(M.getTargetTriple());
 
+  PointerTagShift = 56;
+
+  if (TargetTriple.getArch() == Triple::x86_64) {
+    // x86_64 uses userspace pointer aliases, currently heap-only.
+    PointerTagShift = 41;
+    ClPageAliases = true;
+    ClInstrumentWithCalls = true;  // TODO: implement custom calling convention
+    ClInstrumentStack = false;  // TODO: make stack work with aliases.
+  }
+
   Mapping.init(TargetTriple);
 
   C = &(M.getContext());
@@ -498,6 +513,9 @@ void HWAddressSanitizer::initializeModule() {
 
   UseShortGranules =
       ClUseShortGranules.getNumOccurrences() ? ClUseShortGranules : NewRuntime;
+  if (ClPageAliases)
+    UseShortGranules = false;
+
   OutlinedChecks =
       TargetTriple.isAArch64() && TargetTriple.isOSBinFormatELF() &&
       (ClInlineAllChecks.getNumOccurrences() ? !ClInlineAllChecks : !Recover);
@@ -521,6 +539,9 @@ void HWAddressSanitizer::initializeModule() {
     createHwasanCtorComdat();
     bool InstrumentGlobals =
         ClGlobals.getNumOccurrences() ? ClGlobals : NewRuntime;
+    if (ClPageAliases)
+      InstrumentGlobals = false;  // TODO: make aliases work with globals.
+
     if (InstrumentGlobals)
       instrumentGlobals();
 
@@ -699,7 +720,7 @@ static size_t TypeSizeToSizeIndex(uint32_t TypeSize) {
 }
 
 void HWAddressSanitizer::untagPointerOperand(Instruction *I, Value *Addr) {
-  if (TargetTriple.isAArch64())
+  if (TargetTriple.isAArch64() || TargetTriple.getArch() == Triple::x86_64)
     return;
 
   IRBuilder<> IRB(I);
@@ -742,7 +763,7 @@ void HWAddressSanitizer::instrumentMemAccessInline(Value *Ptr, bool IsWrite,
   }
 
   Value *PtrLong = IRB.CreatePointerCast(Ptr, IntptrTy);
-  Value *PtrTag = IRB.CreateTrunc(IRB.CreateLShr(PtrLong, kPointerTagShift),
+  Value *PtrTag = IRB.CreateTrunc(IRB.CreateLShr(PtrLong, PointerTagShift),
                                   IRB.getInt8Ty());
   Value *AddrLong = untagPointer(IRB, PtrLong);
   Value *Shadow = memToShadow(AddrLong, IRB);
@@ -980,12 +1001,12 @@ Value *HWAddressSanitizer::tagPointer(IRBuilder<> &IRB, Type *Ty,
   if (CompileKernel) {
     // Kernel addresses have 0xFF in the most significant byte.
     Value *ShiftedTag = IRB.CreateOr(
-        IRB.CreateShl(Tag, kPointerTagShift),
-        ConstantInt::get(IntptrTy, (1ULL << kPointerTagShift) - 1));
+        IRB.CreateShl(Tag, PointerTagShift),
+        ConstantInt::get(IntptrTy, (1ULL << PointerTagShift) - 1));
     TaggedPtrLong = IRB.CreateAnd(PtrLong, ShiftedTag);
   } else {
     // Userspace can simply do OR (tag << 56);
-    Value *ShiftedTag = IRB.CreateShl(Tag, kPointerTagShift);
+    Value *ShiftedTag = IRB.CreateShl(Tag, PointerTagShift);
     TaggedPtrLong = IRB.CreateOr(PtrLong, ShiftedTag);
   }
   return IRB.CreateIntToPtr(TaggedPtrLong, Ty);
@@ -997,11 +1018,11 @@ Value *HWAddressSanitizer::untagPointer(IRBuilder<> &IRB, Value *PtrLong) {
   if (CompileKernel) {
     // Kernel addresses have 0xFF in the most significant byte.
     UntaggedPtrLong = IRB.CreateOr(PtrLong,
-        ConstantInt::get(PtrLong->getType(), 0xFFULL << kPointerTagShift));
+        ConstantInt::get(PtrLong->getType(), 0xFFULL << PointerTagShift));
   } else {
     // Userspace addresses have 0x00.
     UntaggedPtrLong = IRB.CreateAnd(PtrLong,
-        ConstantInt::get(PtrLong->getType(), ~(0xFFULL << kPointerTagShift)));
+        ConstantInt::get(PtrLong->getType(), ~(0xFFULL << PointerTagShift)));
   }
   return UntaggedPtrLong;
 }
@@ -1403,7 +1424,7 @@ void HWAddressSanitizer::instrumentGlobal(GlobalVariable *GV, uint8_t Tag) {
   Constant *Aliasee = ConstantExpr::getIntToPtr(
       ConstantExpr::getAdd(
           ConstantExpr::getPtrToInt(NewGV, Int64Ty),
-          ConstantInt::get(Int64Ty, uint64_t(Tag) << kPointerTagShift)),
+          ConstantInt::get(Int64Ty, uint64_t(Tag) << PointerTagShift)),
       GV->getType());
   auto *Alias = GlobalAlias::create(GV->getValueType(), GV->getAddressSpace(),
                                     GV->getLinkage(), "", Aliasee, &M);

@@ -13,13 +13,15 @@
 
 int main() {
   __hwasan_enable_allocator_tagging();
-  // DUMP: [alloc] {{.*}} 10{{$}}
-  // DUMP: in main{{.*}}malloc_bisect.c
-  char * volatile p = (char*)malloc(10);
-  // CRASH: HWAddressSanitizer: tag-mismatch on address
-  // CRASH: in main{{.*}}malloc_bisect.c
-  char volatile x = p[16];
-  free(p);
+  for (int i = 0; i < 10; ++i) {
+    // DUMP: [alloc] {{.*}} 10{{$}}
+    // DUMP: in main{{.*}}malloc_bisect.c
+    char * volatile p = (char*)malloc(10);
+    // CRASH: HWAddressSanitizer: tag-mismatch on address
+    // CRASH: in main{{.*}}malloc_bisect.c
+    free(p);
+    char volatile x = p[0];
+  }
   __hwasan_disable_allocator_tagging();
 
   return 0;

@@ -6,6 +6,9 @@
 // be able to handle this case somehow (e.g. by using a different register for
 // DW_AT_frame_base) but at least we shouldn't get confused by it.
 
+// TODO: Remove once stack aliasing is supported on x86_64.
+// XFAIL: x86_64
+
 __attribute((noinline))
 char *buggy() {
   _Alignas(64) char c[64];

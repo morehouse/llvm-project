@@ -49,6 +49,7 @@ class SizeClassAllocator64 {
   static const uptr kSpaceBeg = Params::kSpaceBeg;
   static const uptr kSpaceSize = Params::kSpaceSize;
   static const uptr kMetadataSize = Params::kMetadataSize;
+  static const uptr kNumAliases = Params::kNumAliases;
   typedef typename Params::SizeClassMap SizeClassMap;
   typedef typename Params::MapUnmapCallback MapUnmapCallback;
 
@@ -70,17 +71,23 @@ class SizeClassAllocator64 {
   }
 
   void Init(s32 release_to_os_interval_ms) {
-    uptr TotalSpaceSize = kSpaceSize + AdditionalSize();
+    uptr TotalSpaceSize = kNumAliases ? kSpaceSize * (kNumAliases + 1) +
+        AdditionalSize() : kSpaceSize + AdditionalSize();
     if (kUsingConstantSpaceBeg) {
       CHECK(IsAligned(kSpaceBeg, SizeClassMap::kMaxSize));
       CHECK_EQ(kSpaceBeg, address_range.Init(TotalSpaceSize,
                                              PrimaryAllocatorName, kSpaceBeg));
     } else {
-      // Combined allocator expects that an 2^N allocation is always aligned to
-      // 2^N. For this to work, the start of the space needs to be aligned as
-      // high as the largest size class (which also needs to be a power of 2).
-      NonConstSpaceBeg = address_range.InitAligned(
-          TotalSpaceSize, SizeClassMap::kMaxSize, PrimaryAllocatorName);
+      if (kNumAliases) {
+        NonConstSpaceBeg = address_range.InitAlignedAliases(kSpaceSize, kNumAliases,
+                                         AdditionalSize(), PrimaryAllocatorName);
+      } else {
+        // Combined allocator expects that an 2^N allocation is always aligned to
+        // 2^N. For this to work, the start of the space needs to be aligned as
+        // high as the largest size class (which also needs to be a power of 2).
+        NonConstSpaceBeg = address_range.InitAligned(
+            TotalSpaceSize, SizeClassMap::kMaxSize, PrimaryAllocatorName);
+      }
       CHECK_NE(NonConstSpaceBeg, ~(uptr)0);
     }
     SetReleaseToOSIntervalMs(release_to_os_interval_ms);
@@ -583,7 +590,10 @@ class SizeClassAllocator64 {
   uptr SpaceBeg() const {
     return kUsingConstantSpaceBeg ? kSpaceBeg : NonConstSpaceBeg;
   }
-  uptr SpaceEnd() const { return  SpaceBeg() + kSpaceSize; }
+  uptr SpaceEnd() const {
+    return kNumAliases ? SpaceBeg() + kSpaceSize * (kNumAliases + 1) :
+        SpaceBeg() + kSpaceSize;
+  }
   // kRegionSize must be >= 2^32.
   COMPILER_CHECK((kRegionSize) >= (1ULL << (SANITIZER_WORDSIZE / 2)));
   // kRegionSize must be <= 2^36, see CompactPtrT.

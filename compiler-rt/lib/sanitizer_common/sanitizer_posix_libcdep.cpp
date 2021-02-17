@@ -345,15 +345,66 @@ uptr ReservedAddressRange::Init(uptr size, const char *name, uptr fixed_addr) {
   return reinterpret_cast<uptr>(base_);
 }
 
+void *MmapSharedNoReserveAligned(uptr size, uptr align) {
+  uptr mmap_size = size + align;
+  uptr unaligned_addr =
+      internal_mmap(nullptr, mmap_size, PROT_READ | PROT_WRITE,
+                    MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+  CHECK(unaligned_addr != ~(uptr)0);
+  uptr aligned_addr = (unaligned_addr + align - 1) & ~(align - 1);
+
+  uptr excess_front = aligned_addr - unaligned_addr;
+  uptr excess_back = unaligned_addr + mmap_size - (aligned_addr + size);
+  internal_munmap(reinterpret_cast<void *>(unaligned_addr), excess_front);
+  internal_munmap(reinterpret_cast<void *>(aligned_addr + size), excess_back);
+  return reinterpret_cast<void *>(aligned_addr);
+}
+
+void *MremapCreateAlias(uptr addr, uptr alias_addr, uptr size) {
+  return mremap(reinterpret_cast<void *>(addr), 0, size,
+                MREMAP_MAYMOVE | MREMAP_FIXED,
+                reinterpret_cast<void *>(alias_addr));
+}
+
+uptr ReservedAddressRange::InitAlignedAliases(
+    uptr alias_size, uptr num_aliases, uptr additional_size, const char *name) {
+  CHECK(IsPowerOfTwo(alias_size));
+  CHECK(IsPowerOfTwo(num_aliases + 1));
+
+  // Allocate enough space for all aliases and additional_size.
+  uptr align = alias_size * (num_aliases + 1);
+  size_ = alias_size * (num_aliases + 1) + additional_size;
+  base_ = MmapSharedNoReserveAligned(size_, align);
+  CHECK(base_ != MAP_FAILED);
+
+  uptr tag_shift = 0;
+  for (uptr i = alias_size; i > 1; i >>= 1)
+    ++tag_shift;
+
+  uptr base_addr = reinterpret_cast<uptr>(base_);
+  for (uptr i = 1; i <= num_aliases; ++i) {
+    uptr alias_bits = i << tag_shift;
+    uptr alias_addr = base_addr | alias_bits;
+    void *alias = MremapCreateAlias(base_addr, alias_addr, alias_size);
+    CHECK(reinterpret_cast<uptr>(alias) == alias_addr);
+  }
+
+  (void)os_handle_;
+  aliases_ = true;
+  return reinterpret_cast<uptr>(base_);
+}
+
 // Uses fixed_addr for now.
 // Will use offset instead once we've implemented this function for real.
 uptr ReservedAddressRange::Map(uptr fixed_addr, uptr size, const char *name) {
+  if (aliases_) return fixed_addr;
   return reinterpret_cast<uptr>(
       MmapFixedOrDieOnFatalError(fixed_addr, size, name));
 }
 
 uptr ReservedAddressRange::MapOrDie(uptr fixed_addr, uptr size,
                                     const char *name) {
+  if (aliases_) return fixed_addr;
   return reinterpret_cast<uptr>(MmapFixedOrDie(fixed_addr, size, name));
 }
 

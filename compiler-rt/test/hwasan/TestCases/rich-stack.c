@@ -2,6 +2,9 @@
 // RUN: %clang_hwasan %s -o %t
 // RUN: not %run %t 3 2 -1 2>&1 | FileCheck %s --check-prefix=R321
 // REQUIRES: stable-runtime
+//
+// TODO: Remove once stack aliasing is supported on x86_64.
+// XFAIL: x86_64
 #include <stdint.h>
 #include <stdlib.h>
 void USE(void *x) { // pretend_to_do_something(void *x)

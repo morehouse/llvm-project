@@ -35,10 +35,17 @@
 
 typedef u8 tag_t;
 
+#if defined(__x86_64__)
+const unsigned kAddressTagShift = 41;
+const uptr kAddressTagMask = 0xFFUL << kAddressTagShift;
+const uptr kAddressUntagMask = ~(3UL << kAddressTagShift);
+#else
 // TBI (Top Byte Ignore) feature of AArch64: bits [63:56] are ignored in address
 // translation and can be used to store a tag.
 const unsigned kAddressTagShift = 56;
 const uptr kAddressTagMask = 0xFFUL << kAddressTagShift;
+const uptr kAddressUntagMask = ~kAddressTagMask;
+#endif
 
 // Minimal alignment of the shadow base address. Determines the space available
 // for threads and stack histories. This is an ABI constant.
@@ -54,7 +61,7 @@ static inline tag_t GetTagFromPointer(uptr p) {
 }
 
 static inline uptr UntagAddr(uptr tagged_addr) {
-  return tagged_addr & ~kAddressTagMask;
+  return tagged_addr & kAddressUntagMask;
 }
 
 static inline void *UntagPtr(const void *tagged_ptr) {
@@ -63,7 +70,7 @@ static inline void *UntagPtr(const void *tagged_ptr) {
 }
 
 static inline uptr AddTagToPointer(uptr p, tag_t tag) {
-  return (p & ~kAddressTagMask) | ((uptr)tag << kAddressTagShift);
+  return (p & kAddressUntagMask) | ((uptr)tag << kAddressTagShift);
 }
 
 namespace __hwasan {

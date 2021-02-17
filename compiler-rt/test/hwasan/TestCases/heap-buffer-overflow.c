@@ -2,8 +2,10 @@
 // RUN: not %run %t 40 2>&1 | FileCheck %s --check-prefix=CHECK40
 // RUN: not %run %t 80 2>&1 | FileCheck %s --check-prefix=CHECK80
 // RUN: not %run %t -30 2>&1 | FileCheck %s --check-prefix=CHECKm30
-// RUN: not %run %t -30 1000000 2>&1 | FileCheck %s --check-prefix=CHECKMm30
-// RUN: not %run %t 1000000 1000000 2>&1 | FileCheck %s --check-prefix=CHECKM
+//
+// TODO: Re-enable once aliasing supports secondary allocator.
+// DISABLED: not %run %t -30 1000000 2>&1 | FileCheck %s --check-prefix=CHECKMm30
+// DISABLED: not %run %t 1000000 1000000 2>&1 | FileCheck %s --check-prefix=CHECKM
 
 // Test OOB within the granule.
 // RUN: not %run %t 31 2>&1 | FileCheck %s --check-prefix=CHECK31

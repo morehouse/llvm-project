@@ -1,6 +1,9 @@
 // RUN: %clangxx_hwasan -DSIZE=16 -O0 %s -o %t && %run %t 2>&1 | FileCheck %s
 
 // REQUIRES: stable-runtime
+//
+// TODO: Re-enable once aliasing mode properly handles __hwasan_tag_memory().
+// UNSUPPORTED: x86_64
 
 #include <assert.h>
 #include <stdlib.h>

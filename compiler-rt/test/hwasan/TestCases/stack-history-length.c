@@ -3,6 +3,9 @@
 // RUN: %env_hwasan_opts=stack_history_size=2048 not %run %t 2047 2>&1 | FileCheck %s --check-prefix=NO
 
 // REQUIRES: stable-runtime
+//
+// TODO: Remove once stack aliasing is supported on x86_64.
+// XFAIL: x86_64
 
 #include <stdlib.h>
 

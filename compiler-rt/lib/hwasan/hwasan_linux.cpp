@@ -217,7 +217,7 @@ void InitThreads() {
 }
 
 bool MemIsApp(uptr p) {
-  CHECK(GetTagFromPointer(p) == 0);
+  //CHECK(GetTagFromPointer(p) == 0);
   return p >= kHighMemStart || (p >= kLowMemStart && p <= kLowMemEnd);
 }
 

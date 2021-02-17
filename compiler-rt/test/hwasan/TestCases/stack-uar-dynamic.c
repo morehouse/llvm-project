@@ -4,6 +4,9 @@
 // still be using FP-relative debug info locations that we can use to find stack
 // objects.
 
+// TODO: Remove once stack aliasing is supported on x86_64.
+// XFAIL: x86_64
+
 __attribute((noinline))
 char *buggy(int b) {
   char c[64];

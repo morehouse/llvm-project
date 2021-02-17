@@ -3,6 +3,9 @@
 
 // REQUIRES: stable-runtime
 
+// TODO: Remove once stack aliasing is supported on x86_64.
+// XFAIL: x86_64
+
 #include <stdlib.h>
 #include <assert.h>
 #include <sanitizer/hwasan_interface.h>

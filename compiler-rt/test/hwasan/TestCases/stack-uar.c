@@ -3,6 +3,9 @@
 // RUN: %clang_hwasan -g %s -o %t && not %env_hwasan_opts=symbolize=0 %run %t 2>&1 | FileCheck %s --check-prefix=NOSYM
 
 // REQUIRES: stable-runtime
+//
+// TODO: Remove once stack aliasing is supported on x86_64.
+// XFAIL: x86_64
 
 void USE(void *x) { // pretend_to_do_something(void *x)
   __asm__ __volatile__("" : : "r" (x) : "memory");

@@ -8,6 +8,9 @@
 // RUN: %clang_hwasan -DSIZE=0x1000 -O0 %s -o %t && not %run %t 2>&1 | FileCheck %s
 
 // REQUIRES: stable-runtime
+//
+// TODO: Remove once stack aliasing is supported on x86_64.
+// XFAIL: x86_64
 
 #include <stdlib.h>
 #include <sanitizer/hwasan_interface.h>

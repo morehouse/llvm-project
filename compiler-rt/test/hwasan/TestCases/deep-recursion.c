@@ -6,6 +6,9 @@
 // RUN:                                       not %run %t 2>&1 | FileCheck %s --check-prefix=DEFAULT
 
 // REQUIRES: stable-runtime
+//
+// TODO: Remove once stack aliasing is supported on x86_64.
+// XFAIL: x86_64
 
 #include <stdlib.h>
 // At least -O1 is needed for this function to not have a stack frame on
