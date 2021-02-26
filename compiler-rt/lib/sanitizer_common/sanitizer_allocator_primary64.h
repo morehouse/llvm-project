@@ -49,7 +49,7 @@ class SizeClassAllocator64 {
   static const uptr kSpaceBeg = Params::kSpaceBeg;
   static const uptr kSpaceSize = Params::kSpaceSize;
   static const uptr kMetadataSize = Params::kMetadataSize;
-  static const uptr kNumAliases = Params::kNumAliases;
+  static const bool kUseAliases = Params::kUseAliases;
   typedef typename Params::SizeClassMap SizeClassMap;
   typedef typename Params::MapUnmapCallback MapUnmapCallback;
 
@@ -70,31 +70,37 @@ class SizeClassAllocator64 {
     return base + (static_cast<uptr>(ptr32) << kCompactPtrScale);
   }
 
-  void Init(s32 release_to_os_interval_ms) {
-    uptr TotalSpaceSize = kNumAliases ? kSpaceSize * (kNumAliases + 1) +
-        AdditionalSize() : kSpaceSize + AdditionalSize();
-    if (kUsingConstantSpaceBeg) {
+  void Init(s32 release_to_os_interval_ms, uptr heap_start = 0) {
+    uptr TotalSpaceSize = kSpaceSize + AdditionalSize();
+    if (kUseAliases) {
+      CHECK(!kUsingConstantSpaceBeg);
+      NonConstSpaceBeg = heap_start;
+      uptr size = AdditionalSize();
+      MetadataSpace = address_range.Init(size, PrimaryAllocatorName);
+      CHECK_NE(MetadataSpace, ~(uptr)0);
+      CHECK_EQ(MetadataSpace,
+               address_range.MapOrDie(MetadataSpace, size,
+                                      "SizeClassAllocator: region info"));
+      MapUnmapCallback().OnMap(MetadataSpace, size);
+    } else if (kUsingConstantSpaceBeg) {
       CHECK(IsAligned(kSpaceBeg, SizeClassMap::kMaxSize));
       CHECK_EQ(kSpaceBeg, address_range.Init(TotalSpaceSize,
                                              PrimaryAllocatorName, kSpaceBeg));
+      MetadataSpace = SpaceEnd();
     } else {
-      if (kNumAliases) {
-        NonConstSpaceBeg = address_range.InitAlignedAliases(kSpaceSize, kNumAliases,
-                                         AdditionalSize(), PrimaryAllocatorName);
-      } else {
-        // Combined allocator expects that an 2^N allocation is always aligned to
-        // 2^N. For this to work, the start of the space needs to be aligned as
-        // high as the largest size class (which also needs to be a power of 2).
-        NonConstSpaceBeg = address_range.InitAligned(
-            TotalSpaceSize, SizeClassMap::kMaxSize, PrimaryAllocatorName);
-      }
+      // Combined allocator expects that an 2^N allocation is always aligned to
+      // 2^N. For this to work, the start of the space needs to be aligned as
+      // high as the largest size class (which also needs to be a power of 2).
+      NonConstSpaceBeg = address_range.InitAligned(
+          TotalSpaceSize, SizeClassMap::kMaxSize, PrimaryAllocatorName);
       CHECK_NE(NonConstSpaceBeg, ~(uptr)0);
+      MetadataSpace = SpaceEnd();
     }
     SetReleaseToOSIntervalMs(release_to_os_interval_ms);
-    MapWithCallbackOrDie(SpaceEnd(), AdditionalSize(),
+    MapWithCallbackOrDie(MetadataSpace, AdditionalSize(),
                          "SizeClassAllocator: region info");
     // Check that the RegionInfo array is aligned on the CacheLine size.
-    DCHECK_EQ(SpaceEnd() % kCacheLineSize, 0);
+    DCHECK_EQ(MetadataSpace % kCacheLineSize, 0);
   }
 
   s32 ReleaseToOSIntervalMs() const {
@@ -587,13 +593,11 @@ class SizeClassAllocator64 {
 
   static const bool kUsingConstantSpaceBeg = kSpaceBeg != ~(uptr)0;
   uptr NonConstSpaceBeg;
+  uptr MetadataSpace;
   uptr SpaceBeg() const {
     return kUsingConstantSpaceBeg ? kSpaceBeg : NonConstSpaceBeg;
   }
-  uptr SpaceEnd() const {
-    return kNumAliases ? SpaceBeg() + kSpaceSize * (kNumAliases + 1) :
-        SpaceBeg() + kSpaceSize;
-  }
+  uptr SpaceEnd() const { return SpaceBeg() + kSpaceSize; }
   // kRegionSize must be >= 2^32.
   COMPILER_CHECK((kRegionSize) >= (1ULL << (SANITIZER_WORDSIZE / 2)));
   // kRegionSize must be <= 2^36, see CompactPtrT.
@@ -636,7 +640,7 @@ class SizeClassAllocator64 {
 
   RegionInfo *GetRegionInfo(uptr class_id) const {
     DCHECK_LT(class_id, kNumClasses);
-    RegionInfo *regions = reinterpret_cast<RegionInfo *>(SpaceEnd());
+    RegionInfo *regions = reinterpret_cast<RegionInfo *>(MetadataSpace);
     return &regions[class_id];
   }
 
@@ -661,6 +665,8 @@ class SizeClassAllocator64 {
   }
 
   bool MapWithCallback(uptr beg, uptr size, const char *name) {
+    if (kUseAliases)
+      return true;
     uptr mapped = address_range.Map(beg, size, name);
     if (UNLIKELY(!mapped))
       return false;
@@ -670,11 +676,15 @@ class SizeClassAllocator64 {
   }
 
   void MapWithCallbackOrDie(uptr beg, uptr size, const char *name) {
+    if (kUseAliases)
+      return;
     CHECK_EQ(beg, address_range.MapOrDie(beg, size, name));
     MapUnmapCallback().OnMap(beg, size);
   }
 
   void UnmapWithCallbackOrDie(uptr beg, uptr size) {
+    if (kUseAliases)
+      return;
     MapUnmapCallback().OnUnmap(beg, size);
     address_range.Unmap(beg, size);
   }

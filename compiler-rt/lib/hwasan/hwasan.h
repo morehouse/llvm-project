@@ -36,16 +36,19 @@
 typedef u8 tag_t;
 
 #if defined(__x86_64__)
-const unsigned kAddressTagShift = 41;
-const uptr kAddressTagMask = 0xFFUL << kAddressTagShift;
-const uptr kAddressUntagMask = ~(3UL << kAddressTagShift);
+// Tags are done in middle bits using userspace aliasing.
+constexpr unsigned kAddressTagShift = 41;
+constexpr unsigned kAddressTagBits = 2;
 #else
 // TBI (Top Byte Ignore) feature of AArch64: bits [63:56] are ignored in address
 // translation and can be used to store a tag.
-const unsigned kAddressTagShift = 56;
-const uptr kAddressTagMask = 0xFFUL << kAddressTagShift;
-const uptr kAddressUntagMask = ~kAddressTagMask;
+constexpr unsigned kAddressTagShift = 56;
+constexpr unsigned kAddressTagBits = 8;
 #endif
+
+const uptr kTagMask = ((1UL << kAddressTagBits) - 1);
+const uptr kAddressTagMask = 0xFFUL << kAddressTagShift;
+constexpr uptr kAddressUntagMask = ~(kTagMask << kAddressTagShift);
 
 // Minimal alignment of the shadow base address. Determines the space available
 // for threads and stack histories. This is an ABI constant.

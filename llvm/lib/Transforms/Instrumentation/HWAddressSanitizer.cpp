@@ -77,10 +77,6 @@ static cl::opt<std::string> ClMemoryAccessCallbackPrefix(
     cl::desc("Prefix for memory access callbacks"), cl::Hidden,
     cl::init("__hwasan_"));
 
-static cl::opt<bool> ClPageAliases("hwasan-page-aliases",
-    cl::desc("use page aliasing to put tags in userspace bits"), cl::Hidden,
-    cl::init(false));
-
 static cl::opt<bool>
     ClInstrumentWithCalls("hwasan-instrument-with-calls",
                 cl::desc("instrument reads and writes with callbacks"),
@@ -287,6 +283,7 @@ private:
   bool OutlinedChecks;
   bool UseShortGranules;
   bool InstrumentLandingPads;
+  bool UsePageAliases = false;
 
   bool HasMatchAllTag = false;
   uint8_t MatchAllTag = 0;
@@ -488,8 +485,8 @@ void HWAddressSanitizer::initializeModule() {
 
   if (TargetTriple.getArch() == Triple::x86_64) {
     // x86_64 uses userspace pointer aliases, currently heap-only.
-    PointerTagShift = 41;
-    ClPageAliases = true;
+    // PointerTagShift = 41;  // All tagging is done in callbacks.
+    UsePageAliases = true;
     ClInstrumentWithCalls = true;  // TODO: implement custom calling convention
     ClInstrumentStack = false;  // TODO: make stack work with aliases.
   }
@@ -513,8 +510,6 @@ void HWAddressSanitizer::initializeModule() {
 
   UseShortGranules =
       ClUseShortGranules.getNumOccurrences() ? ClUseShortGranules : NewRuntime;
-  if (ClPageAliases)
-    UseShortGranules = false;
 
   OutlinedChecks =
       TargetTriple.isAArch64() && TargetTriple.isOSBinFormatELF() &&
@@ -539,7 +534,7 @@ void HWAddressSanitizer::initializeModule() {
     createHwasanCtorComdat();
     bool InstrumentGlobals =
         ClGlobals.getNumOccurrences() ? ClGlobals : NewRuntime;
-    if (ClPageAliases)
+    if (UsePageAliases)
       InstrumentGlobals = false;  // TODO: make aliases work with globals.
 
     if (InstrumentGlobals)
@@ -762,6 +757,7 @@ void HWAddressSanitizer::instrumentMemAccessInline(Value *Ptr, bool IsWrite,
     return;
   }
 
+  assert(!UsePageAliases);
   Value *PtrLong = IRB.CreatePointerCast(Ptr, IntptrTy);
   Value *PtrTag = IRB.CreateTrunc(IRB.CreateLShr(PtrLong, PointerTagShift),
                                   IRB.getInt8Ty());
@@ -997,6 +993,7 @@ Value *HWAddressSanitizer::getUARTag(IRBuilder<> &IRB, Value *StackTag) {
 // Add a tag to an address.
 Value *HWAddressSanitizer::tagPointer(IRBuilder<> &IRB, Type *Ty,
                                       Value *PtrLong, Value *Tag) {
+  assert(!UsePageAliases);
   Value *TaggedPtrLong;
   if (CompileKernel) {
     // Kernel addresses have 0xFF in the most significant byte.
@@ -1014,6 +1011,7 @@ Value *HWAddressSanitizer::tagPointer(IRBuilder<> &IRB, Type *Ty,
 
 // Remove tag from an address.
 Value *HWAddressSanitizer::untagPointer(IRBuilder<> &IRB, Value *PtrLong) {
+  assert(!UsePageAliases);
   Value *UntaggedPtrLong;
   if (CompileKernel) {
     // Kernel addresses have 0xFF in the most significant byte.
@@ -1421,6 +1419,7 @@ void HWAddressSanitizer::instrumentGlobal(GlobalVariable *GV, uint8_t Tag) {
     appendToCompilerUsed(M, Descriptor);
   }
 
+  assert(!UsePageAliases);
   Constant *Aliasee = ConstantExpr::getIntToPtr(
       ConstantExpr::getAdd(
           ConstantExpr::getPtrToInt(NewGV, Int64Ty),

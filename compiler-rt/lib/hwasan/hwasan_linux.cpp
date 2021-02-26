@@ -76,6 +76,9 @@ uptr kHighShadowEnd;
 uptr kHighMemStart;
 uptr kHighMemEnd;
 
+// Used on x86_64 only.
+uptr kHeapStart;
+
 static void PrintRange(uptr start, uptr end, const char *name) {
   Printf("|| [%p, %p] || %.*s ||\n", (void *)start, (void *)end, 10, name);
 }
@@ -174,6 +177,19 @@ bool InitShadow() {
   // High memory starts where allocated shadow allows.
   kHighMemStart = ShadowToMem(kHighShadowStart);
 
+#if defined(__x86_64__)
+  kHeapStart = kHighMemStart;
+
+  // We rely on the top bits of heap pointers matching the shadow base, for
+  // quick alias checks.
+  constexpr unsigned shift = kAddressTagShift + kAddressTagBits + 1;
+  constexpr uptr heap_size = 1UL << (kAddressTagShift + kAddressTagBits);
+  CHECK_EQ(kHeapStart >> shift,
+           __hwasan_shadow_memory_dynamic_address >> shift);
+  CHECK_EQ((kHeapStart + heap_size - 1) >> shift,
+           __hwasan_shadow_memory_dynamic_address >> shift);
+#endif
+
   // Check the sanity of the defined memory ranges (there might be gaps).
   CHECK_EQ(kHighMemStart % GetMmapGranularity(), 0);
   CHECK_GT(kHighMemStart, kHighShadowEnd);
@@ -217,7 +233,9 @@ void InitThreads() {
 }
 
 bool MemIsApp(uptr p) {
-  //CHECK(GetTagFromPointer(p) == 0);
+#if !defined(__x86_64__)
+  CHECK(GetTagFromPointer(p) == 0);
+#endif
   return p >= kHighMemStart || (p >= kLowMemStart && p <= kLowMemEnd);
 }
 

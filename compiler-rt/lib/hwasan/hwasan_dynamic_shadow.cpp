@@ -117,6 +117,13 @@ namespace __hwasan {
 void InitShadowGOT() {}
 
 uptr FindDynamicShadowStart(uptr shadow_size_bytes) {
+#if defined(__x86_64__)
+  constexpr uptr alias_size = 1ULL << kAddressTagShift;
+  constexpr uptr num_aliases = 1ULL << kAddressTagBits;
+  constexpr uptr ring_buffer_size = 1ULL << kShadowBaseAlignment;
+  return MapDynamicShadowAndAliases(shadow_size_bytes, alias_size, num_aliases,
+                                    ring_buffer_size);
+#endif
   return MapDynamicShadow(shadow_size_bytes, kShadowScale, kShadowBaseAlignment,
                           kHighMemEnd);
 }

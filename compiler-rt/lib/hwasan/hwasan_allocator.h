@@ -55,13 +55,19 @@ static const uptr kMaxAllowedMallocSize = 1UL << 40;  // 1T
 
 struct AP64 {
   static const uptr kSpaceBeg = ~0ULL;
-  static const uptr kSpaceSize = 2ULL << 40;
+
+#if defined(__x86_64__)
+  static const uptr kSpaceSize = 1ULL << kAddressTagShift;
+  static const uptr kUseAliases = true;
+#else
+  static const uptr kSpaceSize = 0x2000000000ULL;
+#endif
+
   static const uptr kMetadataSize = sizeof(Metadata);
   typedef __sanitizer::VeryDenseSizeClassMap SizeClassMap;
   using AddressSpaceView = LocalAddressSpaceView;
   typedef HwasanMapUnmapCallback MapUnmapCallback;
   static const uptr kFlags = 0;
-  static const uptr kNumAliases = 3;
 };
 typedef SizeClassAllocator64<AP64> PrimaryAllocator;
 typedef CombinedAllocator<PrimaryAllocator> Allocator;
@@ -103,7 +109,16 @@ typedef RingBuffer<HeapAllocationRecord> HeapAllocationsRingBuffer;
 
 void GetAllocatorStats(AllocatorStatCounters s);
 
-bool IsAlias(uptr addr);
+inline bool IsAlias(uptr addr) {
+#if defined(__x86_64__)
+  // Aliases are mapped next to shadow so that the upper bits match the shadow
+  // base.
+  constexpr uptr shift = kAddressTagShift + kAddressTagBits + 1;
+  return (addr >> shift) == (__hwasan_shadow_memory_dynamic_address >> shift);
+#else
+  return true;
+#endif
+}
 
 } // namespace __hwasan
 

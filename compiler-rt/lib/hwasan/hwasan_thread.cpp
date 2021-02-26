@@ -127,7 +127,7 @@ tag_t Thread::GenerateRandomTag() {
       tag = random_state_ = (random_state_ + 1) & 0xFF;
     }
   } while (!tag);
-  return tag;
+  return tag & kTagMask;
 }
 
 } // namespace __hwasan

@@ -114,7 +114,6 @@ void *MmapNoAccess(uptr size);
 // Dies on all but out of memory errors, in the latter case returns nullptr.
 void *MmapAlignedOrDieOnFatalError(uptr size, uptr alignment,
                                    const char *mem_type);
-
 // Disallow access to a memory range.  Use MmapFixedNoAccess to allocate an
 // unaccessible memory.
 bool MprotectNoAccess(uptr addr, uptr size);
@@ -135,6 +134,15 @@ void UnmapFromTo(uptr from, uptr to);
 // The high_mem_end may be updated if the original shadow size doesn't fit.
 uptr MapDynamicShadow(uptr shadow_size_bytes, uptr shadow_scale,
                       uptr min_shadow_base_alignment, uptr &high_mem_end);
+
+// Let S = max(shadow_size, num_aliases * alias_size, ring_buffer_size).
+// Reserves 2*S bytes of address space to the right of the returned address and
+// ring_buffer_size bytes to the left.  The returned address is aligned to 2*S.
+// Also creates num_aliases regions of accessible memory starting at offset S
+// from the returned address.  Each region has size alias_size and is backed by
+// the same physical memory.
+uptr MapDynamicShadowAndAliases(uptr shadow_size, uptr alias_size,
+                                uptr num_aliases, uptr ring_buffer_size);
 
 // Reserve memory range [beg, end]. If madvise_shadow is true then apply
 // madvise (e.g. hugepages, core dumping) requested by options.
@@ -170,8 +178,6 @@ class ReservedAddressRange {
  public:
   uptr Init(uptr size, const char *name = nullptr, uptr fixed_addr = 0);
   uptr InitAligned(uptr size, uptr align, const char *name = nullptr);
-  uptr InitAlignedAliases(uptr alias_size, uptr num_aliases,
-                          uptr additional_size, const char *name = nullptr);
   uptr Map(uptr fixed_addr, uptr size, const char *name = nullptr);
   uptr MapOrDie(uptr fixed_addr, uptr size, const char *name = nullptr);
   void Unmap(uptr addr, uptr size);
@@ -183,7 +189,6 @@ class ReservedAddressRange {
   uptr size_;
   const char* name_;
   uptr os_handle_;
-  bool aliases_;
 };
 
 typedef void (*fill_profile_f)(uptr start, uptr rss, bool file,
