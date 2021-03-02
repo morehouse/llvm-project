@@ -1,6 +1,9 @@
 // RUN: %clang_hwasan -O0 %s -DMALLOC -DFREE -o %t.mf
 //
-// TODO: Re-enable once aliasing mode addresses the disabled cases.
+// Several tests are disabled since aliasing mode detects some bugs even when
+// tag_in_malloc or tag_in_free are disabled.  This is because tags are in
+// userspace bits and are thus non-zero by default.
+// TODO: Re-enable disabled tests for non-aliasing mode only.
 // DISABLED: %env_hwasan_opts=tag_in_malloc=0,tag_in_free=1 not %run %t.mf 2>&1 | FileCheck %s --check-prefixes=FREE
 // RUN: %env_hwasan_opts=tag_in_malloc=1,tag_in_free=1 not %run %t.mf 2>&1 | FileCheck %s --check-prefixes=MALLOC
 // RUN: %env_hwasan_opts=tag_in_malloc=1,tag_in_free=0 not %run %t.mf 2>&1 | FileCheck %s --check-prefixes=MALLOC
@@ -31,24 +34,21 @@ int main() {
     free(p);
   }
 
-  // Aliasing mode has a 25% chance of not detecting the bug, so we repeat it.
-  for (int i = 0; i < 10; ++i) {
-    char * volatile p = (char*)malloc(10);
+  char *volatile p = (char *)malloc(10);
 #ifdef MALLOC
-    // MALLOC: READ of size 1 at
-    // MALLOC: is located 6 bytes to the right of 10-byte region
-    // MALLOC: allocated here:
-    char volatile x = p[16];
+  // MALLOC: READ of size 1 at
+  // MALLOC: is located 6 bytes to the right of 10-byte region
+  // MALLOC: allocated here:
+  char volatile x = p[16];
 #endif
-    free(p);
+  free(p);
 #ifdef FREE
-    // FREE: READ of size 1 at
-    // FREE: is located 0 bytes inside of 10-byte region
-    // FREE: freed by thread T0 here:
-    // FREE: previously allocated here:
-    char volatile y = p[0];
+  // FREE: READ of size 1 at
+  // FREE: is located 0 bytes inside of 10-byte region
+  // FREE: freed by thread T0 here:
+  // FREE: previously allocated here:
+  char volatile y = p[0];
 #endif
-  }
 
   __hwasan_disable_allocator_tagging();
 

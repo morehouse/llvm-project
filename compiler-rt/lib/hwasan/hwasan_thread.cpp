@@ -121,13 +121,13 @@ tag_t Thread::GenerateRandomTag() {
       if (!random_buffer_)
         random_buffer_ = random_state_ = xorshift(random_state_);
       CHECK(random_buffer_);
-      tag = random_buffer_ & 0xFF;
-      random_buffer_ >>= 8;
+      tag = random_buffer_ & kTagMask;
+      random_buffer_ >>= kAddressTagBits;
     } else {
-      tag = random_state_ = (random_state_ + 1) & 0xFF;
+      tag = random_state_ = (random_state_ + 1) & kTagMask;
     }
   } while (!tag);
-  return tag & kTagMask;
+  return tag;
 }
 
 } // namespace __hwasan

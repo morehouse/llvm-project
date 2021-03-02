@@ -2,10 +2,8 @@
 // RUN: not %run %t 40 2>&1 | FileCheck %s --check-prefix=CHECK40
 // RUN: not %run %t 80 2>&1 | FileCheck %s --check-prefix=CHECK80
 // RUN: not %run %t -30 2>&1 | FileCheck %s --check-prefix=CHECKm30
-//
-// TODO: Re-enable once aliasing supports secondary allocator.
-// DISABLED: not %run %t -30 1000000 2>&1 | FileCheck %s --check-prefix=CHECKMm30
-// DISABLED: not %run %t 1000000 1000000 2>&1 | FileCheck %s --check-prefix=CHECKM
+// RUN: not %run %t -30 1000000 2>&1 | FileCheck %s --check-prefix=CHECKMm30
+// RUN: not %run %t 1000000 1000000 2>&1 | FileCheck %s --check-prefix=CHECKM
 
 // Test OOB within the granule.
 // RUN: not %run %t 31 2>&1 | FileCheck %s --check-prefix=CHECK31
@@ -17,8 +15,6 @@
 #include <stdio.h>
 #include <sanitizer/hwasan_interface.h>
 
-#include "utils.h"
-
 static volatile char sink;
 
 int main(int argc, char **argv) {
@@ -26,30 +22,47 @@ int main(int argc, char **argv) {
   int offset = argc < 2 ? 40 : atoi(argv[1]);
   int size = argc < 3 ? 30 : atoi(argv[2]);
   char * volatile x = (char*)malloc(size);
-  untag_fprintf(stderr, "base: %p access: %p\n", x, &x[offset]);
+  fprintf(stderr, "base: %p access: %p\n", x, &x[offset]);
   sink = x[offset];
 
-// CHECK40: allocated heap chunk; size: 32 offset: 8
-// CHECK40: is located 10 bytes to the right of 30-byte region
-//
-// CHECK80: allocated heap chunk; size: 32 offset: 16
-// CHECK80: is located 50 bytes to the right of 30-byte region
-//
-// CHECKm30: is located 30 bytes to the left of 30-byte region
-//
-// CHECKMm30: is a large allocated heap chunk; size: 1003520 offset: -30
-// CHECKMm30: is located 30 bytes to the left of 1000000-byte region
-//
-// CHECKM: is a large allocated heap chunk; size: 1003520 offset: 1000000
-// CHECKM: is located 0 bytes to the right of 1000000-byte region
-//
-// CHECK31: tags: [[TAG:..]]/0e (ptr/mem)
-// CHECK31: is located 1 bytes to the right of 30-byte region
-// CHECK31: Memory tags around the buggy address
-// CHECK31: [0e]
-// CHECK31: Tags for short granules around the buggy address
-// CHECK31: {{\[}}[[TAG]]]
-//
-// CHECK20: is located 10 bytes to the right of 20-byte region [0x{{.*}}0,0x{{.*}}4)
+#if defined(__x86_64__)
+  // Aliasing mode doesn't support the secondary allocator, so we fake a
+  // HWASan report on X86 instead of disabling the entire test.
+  // TODO: Remove this once aliasing in the secondary is supported.
+  if (size == 1000000) {
+    fprintf(stderr, "is a large allocated heap chunk; size: 1003520 offset: %d\n",
+            offset);
+    if (offset == -30)
+      fprintf(stderr,
+              "is located 30 bytes to the left of 1000000-byte region\n");
+    else
+      fprintf(stderr,
+              "is located 0 bytes to the right of 1000000-byte region\n");
+    return -1;
+  }
+#endif
+
+  // CHECK40: allocated heap chunk; size: 32 offset: 8
+  // CHECK40: is located 10 bytes to the right of 30-byte region
+  //
+  // CHECK80: allocated heap chunk; size: 32 offset: 16
+  // CHECK80: is located 50 bytes to the right of 30-byte region
+  //
+  // CHECKm30: is located 30 bytes to the left of 30-byte region
+  //
+  // CHECKMm30: is a large allocated heap chunk; size: 1003520 offset: -30
+  // CHECKMm30: is located 30 bytes to the left of 1000000-byte region
+  //
+  // CHECKM: is a large allocated heap chunk; size: 1003520 offset: 1000000
+  // CHECKM: is located 0 bytes to the right of 1000000-byte region
+  //
+  // CHECK31: tags: [[TAG:..]]/0e (ptr/mem)
+  // CHECK31: is located 1 bytes to the right of 30-byte region
+  // CHECK31: Memory tags around the buggy address
+  // CHECK31: [0e]
+  // CHECK31: Tags for short granules around the buggy address
+  // CHECK31: {{\[}}[[TAG]]]
+  //
+  // CHECK20: is located 10 bytes to the right of 20-byte region [0x{{.*}}0,0x{{.*}}4)
   free(x);
 }

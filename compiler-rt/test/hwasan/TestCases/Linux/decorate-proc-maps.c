@@ -8,13 +8,7 @@
 // A-NEXT: ---p {{.*}}shadow gap]
 // A-NEXT: rw-p {{.*}}high shadow]
 
-// TODO: re-enable these once aliasing works properly with SizeClassAllocator
-// decorator.
-// DISABLED: rw-p {{.*}}SizeClassAllocator: region data]
-// DISABLED: rw-p {{.*}}SizeClassAllocator: region metadata]
-// DISABLED: rw-p {{.*}}SizeClassAllocator: freearray]
-// DISABLED: rw-p {{.*}}SizeClassAllocator: region info]
-//
+// B-DAG: rw-p {{.*}}SizeClassAllocator: region info]
 // B-DAG: rw-p {{.*}}LargeMmapAllocator]
 // B-DAG: rw-p {{.*}}stack depot]
 

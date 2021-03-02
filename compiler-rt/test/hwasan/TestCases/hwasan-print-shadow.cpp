@@ -3,7 +3,7 @@
 // REQUIRES: stable-runtime
 //
 // TODO: Re-enable once aliasing mode properly handles __hwasan_tag_memory().
-// UNSUPPORTED: x86_64
+// XFAIL: x86_64
 
 #include <assert.h>
 #include <stdlib.h>

@@ -3,8 +3,8 @@
 
 // REQUIRES: aarch64-target-arch || x86_64-target-arch
 
-// TODO: Re-enable once aliasing mode properly handles __hwasan_tag_memory().
-// UNSUPPORTED: x86_64
+// TODO: Re-enable once aliasing mode handles stack.
+// XFAIL: x86_64
 
 #include <assert.h>
 #include <sys/types.h>

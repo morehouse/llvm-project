@@ -4,9 +4,6 @@
 // RUN: not %run %t 42 2>&1 | FileCheck %s --check-prefix=D42
 
 // REQUIRES: stable-runtime
-//
-// TODO: Re-enable once aliasing mode supports this dev note.
-// UNSUPPORTED: x86_64
 
 #include <stdlib.h>
 #include <stdio.h>
