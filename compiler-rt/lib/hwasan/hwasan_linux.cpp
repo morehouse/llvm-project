@@ -178,11 +178,15 @@ bool InitShadow() {
   kHighMemStart = ShadowToMem(kHighShadowStart);
 
 #if defined(__x86_64__)
-  kHeapStart = kHighMemStart;
+  constexpr uptr heap_align =
+      (1UL << kAddressTagShift) * (1UL << kAddressTagBits);
+  uptr heap_offset = Max(heap_align, 1UL << (kMinFirstMatchingBit - 1));
+  kHeapStart = __hwasan_shadow_memory_dynamic_address + heap_offset;
 
   // We rely on the top bits of heap pointers matching the shadow base, for
   // quick alias checks.
-  constexpr unsigned shift = kAddressTagShift + kAddressTagBits + 1;
+  const unsigned shift =
+      Max(kAddressTagShift + kAddressTagBits + 1, kMinFirstMatchingBit);
   constexpr uptr heap_size = 1UL << (kAddressTagShift + kAddressTagBits);
   CHECK_EQ(kHeapStart >> shift,
            __hwasan_shadow_memory_dynamic_address >> shift);

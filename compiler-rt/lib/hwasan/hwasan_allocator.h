@@ -13,13 +13,14 @@
 #ifndef HWASAN_ALLOCATOR_H
 #define HWASAN_ALLOCATOR_H
 
+#include "hwasan.h"
+#include "hwasan_poisoning.h"
 #include "sanitizer_common/sanitizer_allocator.h"
 #include "sanitizer_common/sanitizer_allocator_checks.h"
 #include "sanitizer_common/sanitizer_allocator_interface.h"
 #include "sanitizer_common/sanitizer_allocator_report.h"
 #include "sanitizer_common/sanitizer_common.h"
 #include "sanitizer_common/sanitizer_ring_buffer.h"
-#include "hwasan_poisoning.h"
 
 #if !defined(__aarch64__) && !defined(__x86_64__)
 #error Unsupported platform
@@ -109,11 +110,13 @@ typedef RingBuffer<HeapAllocationRecord> HeapAllocationsRingBuffer;
 
 void GetAllocatorStats(AllocatorStatCounters s);
 
-inline bool IsAlias(uptr addr) {
+inline bool InTaggableRegion(uptr addr) {
 #if defined(__x86_64__)
   // Aliases are mapped next to shadow so that the upper bits match the shadow
   // base.
-  constexpr uptr shift = kAddressTagShift + kAddressTagBits + 1;
+  constexpr uptr min_shift = kAddressTagShift + kAddressTagBits + 1;
+  constexpr uptr shift =
+      min_shift < kMinFirstMatchingBit ? kMinFirstMatchingBit : min_shift;
   return (addr >> shift) == (__hwasan_shadow_memory_dynamic_address >> shift);
 #else
   return true;

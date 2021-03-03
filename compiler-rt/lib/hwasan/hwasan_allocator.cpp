@@ -159,7 +159,8 @@ static void *HwasanAllocate(StackTrace *stack, uptr orig_size, uptr alignment,
   // retag to 0.
   tag_t tag = BaseTag(user_ptr);
   if ((flags()->tag_in_malloc || flags()->tag_in_free) &&
-      atomic_load_relaxed(&hwasan_allocator_tagging_enabled)) {
+      atomic_load_relaxed(&hwasan_allocator_tagging_enabled) &&
+      InTaggableRegion(reinterpret_cast<uptr>(user_ptr))) {
     if (flags()->tag_in_malloc && malloc_bisect(stack, orig_size)) {
       tag |= t ? t->GenerateRandomTag() : kFallbackAllocTag;
       uptr tag_size = orig_size ? orig_size : 1;
@@ -191,7 +192,7 @@ static void *HwasanAllocate(StackTrace *stack, uptr orig_size, uptr alignment,
 static bool PointerAndMemoryTagsMatch(void *tagged_ptr) {
   CHECK(tagged_ptr);
   uptr tagged_uptr = reinterpret_cast<uptr>(tagged_ptr);
-  if (!IsAlias(tagged_uptr))
+  if (!InTaggableRegion(tagged_uptr))
     return true;
   tag_t mem_tag = *reinterpret_cast<tag_t *>(
       MemToShadow(reinterpret_cast<uptr>(UntagPtr(tagged_ptr))));
@@ -205,7 +206,7 @@ static void HwasanDeallocate(StackTrace *stack, void *tagged_ptr) {
   if (!PointerAndMemoryTagsMatch(tagged_ptr))
     ReportInvalidFree(stack, reinterpret_cast<uptr>(tagged_ptr));
 
-  void *untagged_ptr = IsAlias(reinterpret_cast<uptr>(tagged_ptr))
+  void *untagged_ptr = InTaggableRegion(reinterpret_cast<uptr>(tagged_ptr))
                            ? UntagPtr(tagged_ptr)
                            : tagged_ptr;
   void *aligned_ptr = reinterpret_cast<void *>(
@@ -241,7 +242,7 @@ static void HwasanDeallocate(StackTrace *stack, void *tagged_ptr) {
   }
   if (flags()->tag_in_free && malloc_bisect(stack, 0) &&
       atomic_load_relaxed(&hwasan_allocator_tagging_enabled) &&
-      IsAlias(reinterpret_cast<uptr>(tagged_ptr))) {
+      InTaggableRegion(reinterpret_cast<uptr>(tagged_ptr))) {
     tag_t tag =
         BaseTag(untagged_ptr) | (t ? t->GenerateRandomTag() : kFallbackFreeTag);
     TagMemoryAligned(reinterpret_cast<uptr>(aligned_ptr), TaggedSize(orig_size),

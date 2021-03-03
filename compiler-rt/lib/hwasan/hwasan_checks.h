@@ -82,7 +82,7 @@ enum class AccessType { Load, Store };
 
 template <ErrorAction EA, AccessType AT, unsigned LogSize>
 __attribute__((always_inline, nodebug)) static void CheckAddress(uptr p) {
-  if (!IsAlias(p))
+  if (!InTaggableRegion(p))
     return;
   uptr ptr_raw = p & kAddressUntagMask;
   tag_t mem_tag = *(tag_t *)MemToShadow(ptr_raw);
@@ -97,7 +97,7 @@ __attribute__((always_inline, nodebug)) static void CheckAddress(uptr p) {
 template <ErrorAction EA, AccessType AT>
 __attribute__((always_inline, nodebug)) static void CheckAddressSized(uptr p,
                                                                       uptr sz) {
-  if (sz == 0 || !IsAlias(p))
+  if (sz == 0 || !InTaggableRegion(p))
     return;
   tag_t ptr_tag = GetTagFromPointer(p);
   uptr ptr_raw = p & kAddressUntagMask;

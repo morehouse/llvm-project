@@ -37,8 +37,12 @@ typedef u8 tag_t;
 
 #if defined(__x86_64__)
 // Tags are done in middle bits using userspace aliasing.
-constexpr unsigned kAddressTagShift = 41;
+constexpr unsigned kAddressTagShift = 39;
 constexpr unsigned kAddressTagBits = 2;
+
+// The lowest first bit we check against the shadow base to determine if an
+// address is in our alias region.  This is fixed at log(shadow size) + 1.
+constexpr unsigned kMinFirstMatchingBit = 44;
 #else
 // TBI (Top Byte Ignore) feature of AArch64: bits [63:56] are ignored in address
 // translation and can be used to store a tag.
