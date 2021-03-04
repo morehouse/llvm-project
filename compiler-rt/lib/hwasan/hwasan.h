@@ -38,7 +38,7 @@ typedef u8 tag_t;
 #if defined(__x86_64__)
 // Tags are done in middle bits using userspace aliasing.
 constexpr unsigned kAddressTagShift = 39;
-constexpr unsigned kAddressTagBits = 2;
+constexpr unsigned kAddressTagBits = 3;
 
 // The lowest first bit we check against the shadow base to determine if an
 // address is in our alias region.  This is fixed at log(shadow size) + 1.

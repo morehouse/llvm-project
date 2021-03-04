@@ -74,6 +74,7 @@ struct AP64 {  // Allocator64 parameters. Deliberately using a short name.
   typedef DefaultSizeClassMap SizeClassMap;
   typedef MsanMapUnmapCallback MapUnmapCallback;
   static const uptr kFlags = 0;
+  static const bool kUseAliases = false;
   using AddressSpaceView = LocalAddressSpaceView;
 };
 

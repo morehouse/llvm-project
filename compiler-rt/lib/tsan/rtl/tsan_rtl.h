@@ -65,6 +65,7 @@ struct AP32 {
   using AddressSpaceView = LocalAddressSpaceView;
   typedef __tsan::MapUnmapCallback MapUnmapCallback;
   static const uptr kFlags = 0;
+  static const bool kUseAliases = false;
 };
 typedef SizeClassAllocator32<AP32> PrimaryAllocator;
 #else
@@ -75,6 +76,7 @@ struct AP64 {  // Allocator64 parameters. Deliberately using a short name.
   typedef DefaultSizeClassMap SizeClassMap;
   typedef __tsan::MapUnmapCallback MapUnmapCallback;
   static const uptr kFlags = 0;
+  static const bool kUseAliases = false;
   using AddressSpaceView = LocalAddressSpaceView;
 };
 typedef SizeClassAllocator64<AP64> PrimaryAllocator;

@@ -164,6 +164,7 @@ struct AP64 {  // Allocator64 parameters. Deliberately using a short name.
   typedef __asan::SizeClassMap SizeClassMap;
   typedef AsanMapUnmapCallback MapUnmapCallback;
   static const uptr kFlags = 0;
+  static const bool kUseAliases = false;
   using AddressSpaceView = AddressSpaceViewTy;
 };
 
@@ -182,6 +183,7 @@ struct AP32 {
   using AddressSpaceView = AddressSpaceViewTy;
   typedef AsanMapUnmapCallback MapUnmapCallback;
   static const uptr kFlags = 0;
+  static const bool kUseAliases = false;
 };
 template <typename AddressSpaceView>
 using PrimaryAllocatorASVT = SizeClassAllocator32<AP32<AddressSpaceView> >;

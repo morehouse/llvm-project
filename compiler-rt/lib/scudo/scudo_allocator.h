@@ -80,6 +80,7 @@ struct AP64 {
   typedef NoOpMapUnmapCallback MapUnmapCallback;
   static const uptr kFlags =
       SizeClassAllocator64FlagMasks::kRandomShuffleChunks;
+  static const bool kUseAliases = false;
   using AddressSpaceView = LocalAddressSpaceView;
 };
 typedef SizeClassAllocator64<AP64> PrimaryT;
@@ -95,6 +96,7 @@ struct AP32 {
   static const uptr kFlags =
       SizeClassAllocator32FlagMasks::kRandomShuffleChunks |
       SizeClassAllocator32FlagMasks::kUseSeparateSizeClassForBatch;
+  static const bool kUseAliases = false;
 };
 typedef SizeClassAllocator32<AP32> PrimaryT;
 #endif  // SANITIZER_CAN_USE_ALLOCATOR64
